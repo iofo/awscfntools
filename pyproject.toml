@@ -3,8 +3,9 @@ requires = ["setuptools>=61.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
+requires-python = ">= 3.12"
 name = "awscfntools"
 version = "0.1.0"
 dependencies = [
         "boto3",
-        "json"]
+        "ec2-metadata"]
