@@ -37,6 +37,7 @@ def main():
             try:
                 os.mkdir(tags["mountpoint"])
                 user, group = tags["owner"].split(":")
+                print("Setting ownership of {mnt} to {user}:{group}".format(mnt=tags["mountpoint"],user=user,group=group))
                 shutil.chown(tags["mountpoint"],user=user,group=group)
             except Exception as e:
                 print(f"Error mkdir {e}")
@@ -58,8 +59,9 @@ def main():
         for i in devices["blockdevices"]:
             mntinfo = mounts.get(i["serial"],None)
             if mntinfo:
-                dev = "/dev/"+i["name"]
-                print("UUID={uuid} {mountpoint} {fstype} discard,commit=30,errors=remount-ro    0 1".format(uuid=i["uuid"],fstype=mntinfo["fstype"],mountpoint=mntinfo["mount"]),file=file)
+                if i["uuid"] is not None:
+                    dev = "/dev/"+i["name"]
+                    print("UUID={uuid} {mountpoint} {fstype} discard,commit=30,errors=remount-ro    0 1".format(uuid=i["uuid"],fstype=mntinfo["fstype"],mountpoint=mntinfo["mount"]),file=file)
 
 if __name__ == '__main__':
     main()
