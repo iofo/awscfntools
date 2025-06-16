@@ -1,3 +1,5 @@
+import shutil
+import os
 import boto3
 import json
 import ec2_metadata
@@ -15,12 +17,12 @@ def format_disk(dev,type):
 
 def list_drive_info():
     try:
-        result = subprocess.run(['lsblk','-l','-N','--json','-o','+UUID'],capture_output=True, text=True, check=True)
+        result = subprocess.run(['lsblk','-l','-N','--json','-o','+UUID,FSTYPE'],capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
     except subprocess.CalledProcessError as e:
-        print(f"Error executing mkfs {e}")
+        print(f"Error executing lsblk {e}")
     except FileNotFoundError:
-        print("mkfsnot found. Please install it.")
+        print("lsblk found. Please install it.")
 
 def main():
     client = boto3.client("ec2",region_name=ec2_metadata.ec2_metadata.region)
@@ -31,15 +33,33 @@ def main():
         if tags.get("mountpoint",None):
             #print(tags.get("mountpoint",""),v["VolumeId"])
             volid = v["VolumeId"].replace("-","")
-            mounts[volid] = {"mount":tags.get("mountpoint",""),"fstype":tags.get("fstype","ext4")}
+            mounts[volid] = {"mount":tags.get("mountpoint",""),"fstype":tags.get("fstype","ext4"),"owner":tags.get("owner","root:root")}
+            try:
+                os.mkdir(tags["mountpoint"])
+                user, group = tags["owner"].split(":")
+                shutil.chown(tags["mountpoint"],user=user,group=group)
+            except Exception as e:
+                print(f"Error mkdir {e}")
 
     devices = list_drive_info()
-
     for i in devices["blockdevices"]:
         mntinfo = mounts.get(i["serial"],None)
         if mntinfo:
             dev = "/dev/"+i["name"]
-            print("UUID={uuid} {mountpoint} {fstype} discard,commit=30,errors=remount-ro    0 1".format(uuid=i["uuid"],fstype=mntinfo["fstype"],mountpoint=mntinfo["mount"]))
+            print(dev,i["fstype"])
+            if not i["fstype"]:
+                print("NOT FORMATED - Formatting...",i["name"],dev)
+                format_disk(dev,mntinfo["fstype"])
+            else:
+                print("ALREADY FORMATTED",i["name"]);
+
+    devices = list_drive_info() # reload after formatting
+    with open("/etc/fstab","a") as file:
+        for i in devices["blockdevices"]:
+            mntinfo = mounts.get(i["serial"],None)
+            if mntinfo:
+                dev = "/dev/"+i["name"]
+                print("UUID={uuid} {mountpoint} {fstype} discard,commit=30,errors=remount-ro    0 1".format(uuid=i["uuid"],fstype=mntinfo["fstype"],mountpoint=mntinfo["mount"]),file=file)
 
 if __name__ == '__main__':
     main()
